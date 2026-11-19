@@ -1,0 +1,38 @@
+{
+  "name": "kite-x402-testkit",
+  "version": "0.1.0",
+  "description": "CLI acceptance checks for Kite x402 payment challenges",
+  "license": "Apache-2.0",
+  "author": "eightyun",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eightyun/kite-x402-testkit.git"
+  },
+  "type": "module",
+  "bin": {
+    "kite-x402-testkit": "dist/src/cli.js"
+  },
+  "files": [
+    "dist/src",
+    "docs/CLI.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run build && node --test dist/tests/*.test.js",
+    "start": "node dist/src/cli.js",
+    "example": "node dist/examples/fixture.js"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3"
+  }
+}
