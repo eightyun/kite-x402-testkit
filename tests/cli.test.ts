@@ -91,7 +91,7 @@ test("simulate reports gateway startup failure with a nonzero JUnit result", asy
   assert.equal(result.stderr, "");
   assert.match(
     result.stdout,
-    /<testsuite name="kite-x402\.simulation" tests="5" failures="5"/,
+    /<testsuite name="kite-x402\.simulation" tests="4" failures="4"/,
   );
   assert.match(result.stdout, /<failure message="gateway_exited">/);
 });

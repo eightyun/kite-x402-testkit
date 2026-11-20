@@ -41,7 +41,7 @@ kite-x402-testkit simulate --suite examples/scenarios/core.json --format junit -
 
 Run a JSON suite against a gateway you trust and can start as a foreground process. The command starts a fresh process per case from a temporary directory. Use absolute paths for file arguments after `--`. The process must read `PORT`, `PAY_TO`, `PRICE_USD`, `KITE_NETWORK`, `FACILITATOR_URL` and `UPSTREAM_URL` from its environment and expose `GET /healthz` and a protected `GET /v1/...` route. Run the gateway in a local development or CI environment. The facilitator and upstream fixtures listen on loopback.
 
-The suite declares a `schemaVersion` of `1`, a protected `path`, and an array of cases with unique `id`, `mode`, and expected `httpStatus` fields. The sample checks five cases.
+The suite declares a `schemaVersion` of `1`, a protected `path`, and an array of cases with unique `id`, `mode`, and expected `httpStatus` fields. The core suite checks the first four cases below. Run `examples/scenarios/upstream-timeout.json` against gateways with configurable upstream deadlines.
 
 | Mode               | Fixture behavior                      | Expected calls               |
 | ------------------ | ------------------------------------- | ---------------------------- |

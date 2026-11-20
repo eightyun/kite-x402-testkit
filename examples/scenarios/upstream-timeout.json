@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "path": "/v1/testkit",
+  "scenarios": [
+    {
+      "id": "upstream-timeout",
+      "mode": "upstream-timeout",
+      "httpStatus": [502, 504]
+    }
+  ]
+}

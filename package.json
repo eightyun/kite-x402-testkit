@@ -1,7 +1,7 @@
 {
   "name": "kite-x402-testkit",
   "version": "0.1.0",
-  "description": "CLI acceptance checks for Kite x402 payment challenges",
+  "description": "CLI acceptance checks and payment flow simulations for Kite x402",
   "license": "Apache-2.0",
   "author": "eightyun",
   "repository": {
@@ -15,7 +15,7 @@
   "files": [
     "dist/src",
     "docs/CLI.md",
-    "examples/scenarios/core.json",
+    "examples/scenarios",
     "README.md",
     "LICENSE"
   ],

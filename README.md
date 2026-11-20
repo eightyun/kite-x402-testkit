@@ -1,12 +1,12 @@
 # Kite x402 Testkit
 
-Kite x402 Testkit is a command-line acceptance checker for a single deployed or local x402 service. It sends an unpaid request, validates the returned x402 v2 payment challenge against Kite network parameters, and emits a CI-friendly result. It does not sign payments, contact a facilitator, or claim that a challenge proves settlement.
+Kite x402 Testkit is a command-line acceptance tool for Kite x402 services. Use `check` to validate a service's unpaid x402 v2 challenge. Use `simulate` to exercise a local gateway's verification, upstream delivery, and settlement flow with controlled fixtures. Both commands report results for CI.
 
 ## Kite ecosystem integration
 
 The checker validates the payment terms that Kite Passport agents need to evaluate before paying a service: x402 v2, the `exact` scheme, Kite mainnet (`eip155:2366`) or testnet (`eip155:2368`), the network's settlement asset, and its EIP-712 domain. The chain and asset constants are defined in `src/kite.ts`; challenge decoding and validation are in `src/challenge.ts`. These checks make a concrete protocol-level connection to Kite instead of merely naming the ecosystem.
 
-The first release checks unpaid challenges only. A passing result is not evidence of a successful facilitator verification, upstream response, payment settlement, or on-chain transfer. Passport-mediated testnet payment and receipt verification are planned as a separate opt-in capability.
+The simulation exercises a Kite testnet offer using a synthetic payment payload. JSON reports label this evidence `simulation`. Live payment and on-chain receipt verification are planned separately.
 
 ## Requirements
 
@@ -64,19 +64,36 @@ Available options:
 
 When `--network` is omitted, at least one valid Kite mainnet or testnet offer must be present. Optional asset, payee, and amount expectations are checked against the same offer. Amounts are integer token units, not human-readable USD values.
 
+## Simulate a payment flow
+
+CI checks the official Kite Express template and the community Axum and Hono gateways. The pinned revisions and build commands are in [.github/workflows/ci.yml](.github/workflows/ci.yml). After building a gateway from its checkout, run it with the shared core suite.
+
+```sh
+node dist/src/cli.js simulate --suite examples/scenarios/core.json -- \
+  node /absolute/path/to/kite-x402-services/templates/typescript-express/dist/index.js
+
+node dist/src/cli.js simulate --suite examples/scenarios/core.json -- \
+  /absolute/path/to/kite-x402-axum/target/debug/kite-x402-service
+
+node dist/src/cli.js simulate --suite examples/scenarios/core.json --format junit -- \
+  bun /absolute/path/to/kite-x402-hono/src/cli.ts > simulation.xml
+```
+
+The core suite checks successful delivery, an upstream HTTP error, verification refusal, and settlement refusal. Axum and Hono also run `examples/scenarios/upstream-timeout.json`. The official Express template has no configurable upstream timeout. Both suites check the HTTP result and exact call sequence. The fixtures use local HTTP and need no keys or funds. CI downloads the toolchains and dependencies before running the simulations.
+
 ## Exit codes and report
 
 - `0`: all checks passed
 - `1`: endpoint or challenge failed validation
 - `2`: invalid CLI input or invocation
 
-JSON output uses `schemaVersion: 1`, stable reason codes, sanitized target information, and the observed payment terms. It omits query strings, response bodies, authorization headers, cookies, and raw payment headers. The report does not contain secrets from the request because the CLI does not send any credentials.
+The `check` JSON output uses `schemaVersion: 1`, stable reason codes, sanitized target information, and the observed payment terms. It omits query strings, response bodies, authorization headers, cookies, and raw payment headers. The report does not contain secrets from the request because the CLI does not send any credentials.
 
 ## Test and CI
 
-`npm test` runs local HTTP integration tests. The fixture covers a valid Kite challenge, network/asset/domain mismatches, expected-value mismatches, malformed or missing headers, unexpected status codes, timeout, and redirect handling. The suite does not contact Kite RPC, a facilitator, or any public service.
+`npm test` runs the CLI and challenge regression tests. The fixtures cover a valid Kite challenge, network/asset/domain mismatches, expected-value mismatches, malformed or missing headers, unexpected status codes, timeout, and redirect handling. The suite does not contact Kite RPC, a facilitator, or any public service.
 
-GitHub Actions runs formatting, type checking, tests, and a production build on pushes and pull requests.
+GitHub Actions runs formatting, type checking, tests, and a production build on pushes and pull requests. A separate job runs the shared suite against pinned official Express, Axum, and Hono versions and uploads a JUnit report for each gateway.
 
 ## Architecture
 
@@ -86,8 +103,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for module responsibilities, da
 
 - Only x402 v2 `exact` offers on the two configured Kite EVM networks are evaluated.
 - A valid challenge does not prove that a paid request will succeed or settle.
-- Payment signing, real-money execution, continuous monitoring, and admission scoring are outside the initial release.
-- Only challenge headers are evaluated; service functionality and upstream quality are not.
+- Simulations require a locally runnable gateway using the environment contract in [docs/CLI.md](docs/CLI.md).
+- Live payment and chain finality are outside the current commands.
 
 ## License
 
