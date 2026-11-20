@@ -1,13 +1,13 @@
 import { constants } from "node:fs";
 import { open } from "node:fs/promises";
 
-export type Mode = "success" | "upstream-error";
+export type Mode = keyof typeof expectedCalls;
 export type Operation = "verify" | "upstream" | "settle";
 
 export interface Scenario {
   id: string;
   mode: Mode;
-  httpStatus: number;
+  httpStatus: number | number[];
 }
 
 export interface Suite {
@@ -15,10 +15,42 @@ export interface Suite {
   scenarios: Scenario[];
 }
 
-export const expectedCalls: Record<Mode, readonly Operation[]> = {
+export const expectedCalls = {
   success: ["verify", "upstream", "settle"],
   "upstream-error": ["verify", "upstream"],
-};
+  "verify-rejected": ["verify"],
+  "settle-rejected": ["verify", "upstream", "settle"],
+  "upstream-timeout": ["verify", "upstream"],
+} as const satisfies Record<string, readonly Operation[]>;
+
+function isMode(value: unknown): value is Mode {
+  return typeof value === "string" && Object.hasOwn(expectedCalls, value);
+}
+
+function isErrorStatus(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 400 &&
+    value <= 599
+  );
+}
+
+function isExpectedStatus(
+  mode: Mode,
+  value: unknown,
+): value is number | number[] {
+  if (mode === "success") return value === 200;
+  if (mode === "upstream-timeout" && Array.isArray(value)) {
+    return (
+      value.length > 0 &&
+      value.length <= 2 &&
+      new Set(value).size === value.length &&
+      value.every((status) => status === 502 || status === 504)
+    );
+  }
+  return isErrorStatus(value);
+}
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -67,12 +99,8 @@ export async function loadSuite(path: string): Promise<Suite> {
       typeof scenario.id !== "string" ||
       !/^[a-zA-Z0-9_-]{1,64}$/.test(scenario.id) ||
       ids.has(scenario.id) ||
-      (scenario.mode !== "success" && scenario.mode !== "upstream-error") ||
-      typeof scenario.httpStatus !== "number" ||
-      !Number.isInteger(scenario.httpStatus) ||
-      (scenario.mode === "success"
-        ? scenario.httpStatus !== 200
-        : scenario.httpStatus < 400 || scenario.httpStatus > 599)
+      !isMode(scenario.mode) ||
+      !isExpectedStatus(scenario.mode, scenario.httpStatus)
     )
       throw new Error("invalid_suite");
     ids.add(scenario.id);

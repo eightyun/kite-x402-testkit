@@ -87,13 +87,31 @@ async function simulate(
     return;
   }
   const command: Command = [executable, ...args];
+  const controller = new AbortController();
+  let interruptCode = 0;
+  const interrupt = (code: number) => {
+    interruptCode ||= code;
+    controller.abort();
+  };
+  const onInterrupt = () => interrupt(130);
+  const onTerminate = () => interrupt(143);
+  process.on("SIGINT", onInterrupt);
+  process.on("SIGTERM", onTerminate);
   try {
-    const report = await runSimulation(suite, command);
+    const report = await runSimulation(suite, command, controller.signal);
+    controller.signal.throwIfAborted();
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     if (report.status === "failed") process.exitCode = 1;
   } catch {
-    process.stderr.write("Error: could not run the simulation.\n");
-    process.exitCode = 1;
+    process.stderr.write(
+      interruptCode
+        ? "Simulation interrupted.\n"
+        : "Error: could not run the simulation.\n",
+    );
+    process.exitCode = interruptCode || 1;
+  } finally {
+    process.off("SIGINT", onInterrupt);
+    process.off("SIGTERM", onTerminate);
   }
 }
 

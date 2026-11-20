@@ -14,6 +14,8 @@ export const AMOUNT = "1000000000000000";
 export const PAY_TO = "0x0000000000000000000000000000000000000001";
 export const PAYER = "0x0000000000000000000000000000000000000002";
 
+export const UPSTREAM_TIMEOUT_MS = 400;
+
 const FIXTURE_SIGNATURE = "testkit-synthetic-signature";
 
 export function paymentHeader(accepted: Record<string, unknown>): string {
@@ -78,6 +80,12 @@ export async function startFixture(path: string, scenario: Scenario) {
     transaction: `testkit-simulated-${randomUUID()}`,
     payer: PAYER,
   };
+  const rejection = {
+    success: false,
+    network: NETWORK,
+    transaction: "",
+    errorReason: "testkit_settlement_refused",
+  };
   const facilitator = await listen(async (request, response) => {
     if (request.method === "GET" && request.url === "/facilitator/supported") {
       const { domainName, domainVersion } = KITE_NETWORKS[NETWORK];
@@ -108,7 +116,17 @@ export async function startFixture(path: string, scenario: Scenario) {
       send(
         response,
         200,
-        operation === "verify" ? { isValid: true, payer: PAYER } : receipt,
+        operation === "verify"
+          ? scenario.mode === "verify-rejected"
+            ? {
+                isValid: false,
+                invalidReason: "testkit_verification_refused",
+                payer: PAYER,
+              }
+            : { isValid: true, payer: PAYER }
+          : scenario.mode === "settle-rejected"
+            ? rejection
+            : receipt,
       );
     } else {
       request.resume();
@@ -127,7 +145,7 @@ export async function startFixture(path: string, scenario: Scenario) {
       calls.push("upstream");
       if (scenario.mode === "upstream-error") {
         send(response, 503, { error: "testkit_upstream_failure" });
-      } else {
+      } else if (scenario.mode !== "upstream-timeout") {
         send(response, 200, delivery);
       }
     });
@@ -140,6 +158,7 @@ export async function startFixture(path: string, scenario: Scenario) {
       },
       delivery,
       receipt,
+      rejection,
       close: () => Promise.all([facilitator.close(), upstream.close()]),
     };
   } catch (error) {

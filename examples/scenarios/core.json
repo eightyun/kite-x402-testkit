@@ -3,6 +3,13 @@
   "path": "/v1/testkit",
   "scenarios": [
     { "id": "paid-success", "mode": "success", "httpStatus": 200 },
-    { "id": "upstream-failure", "mode": "upstream-error", "httpStatus": 503 }
+    { "id": "upstream-failure", "mode": "upstream-error", "httpStatus": 503 },
+    { "id": "verify-refusal", "mode": "verify-rejected", "httpStatus": 402 },
+    { "id": "settle-refusal", "mode": "settle-rejected", "httpStatus": 402 },
+    {
+      "id": "upstream-timeout",
+      "mode": "upstream-timeout",
+      "httpStatus": [502, 504]
+    }
   ]
 }

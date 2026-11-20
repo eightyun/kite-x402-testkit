@@ -20,6 +20,7 @@ import {
   PRICE,
   paymentHeader,
   startFixture,
+  UPSTREAM_TIMEOUT_MS,
 } from "./simulation-fixture.js";
 
 type Fixture = Awaited<ReturnType<typeof startFixture>>;
@@ -30,7 +31,7 @@ export interface ScenarioResult {
   mode: Scenario["mode"];
   status: "passed" | "failed";
   reasonCode: string;
-  expectedHttpStatus: number;
+  expectedHttpStatus: Scenario["httpStatus"];
   httpStatus?: number;
   expectedCalls: readonly Operation[];
   calls: Operation[];
@@ -63,6 +64,7 @@ function launchGateway(
   cwd: string,
   port: number,
   fixture: Fixture,
+  scenario: Scenario,
 ) {
   const child = spawn(
     executable.includes("/") || executable.includes("\\")
@@ -82,6 +84,9 @@ function launchGateway(
         KITE_NETWORK: "testnet",
         PRICE_USD: PRICE,
         PAY_TO,
+        ...(scenario.mode === "upstream-timeout"
+          ? { UPSTREAM_TIMEOUT_MS: String(UPSTREAM_TIMEOUT_MS) }
+          : {}),
       },
     },
   );
@@ -114,21 +119,23 @@ function launchGateway(
 async function ready(
   origin: string,
   gateway: ReturnType<typeof launchGateway>,
+  signal: AbortSignal,
 ): Promise<string | undefined> {
   const deadline = performance.now() + 5_000;
   while (performance.now() < deadline) {
+    signal.throwIfAborted();
     if (gateway.problem) return gateway.problem;
     try {
       const response = await fetch(`${origin}/healthz`, {
         redirect: "manual",
-        signal: AbortSignal.timeout(250),
+        signal: AbortSignal.any([signal, AbortSignal.timeout(250)]),
       });
       await response.body?.cancel();
       if (response.status === 200 && !gateway.problem) return undefined;
     } catch {
       // 进程可能尚未开始监听。
     }
-    await delay(50);
+    await delay(50, undefined, { signal });
   }
   return gateway.problem ?? "gateway_start_timeout";
 }
@@ -153,7 +160,7 @@ async function responseText(response: Response): Promise<string> {
 
 function validReceipt(
   header: string | null,
-  expected: Fixture["receipt"],
+  expected: Fixture["receipt"] | Fixture["rejection"],
 ): boolean {
   if (header === null || header.length > 4096) return false;
   try {
@@ -176,9 +183,10 @@ async function runScenario(
   path: string,
   scenario: Scenario,
   command: Command,
-  cwd: string,
+  signal: AbortSignal,
 ): Promise<ScenarioResult> {
-  const expected = expectedCalls[scenario.mode];
+  const expected: readonly Operation[] = expectedCalls[scenario.mode];
+  const cwd = await mkdtemp(join(tmpdir(), "kite-x402-testkit-"));
   let fixture: Fixture | undefined;
   let gateway: ReturnType<typeof launchGateway> | undefined;
   let httpStatus: number | undefined;
@@ -197,13 +205,14 @@ async function runScenario(
     fixture = await startFixture(path, scenario);
     const port = await availablePort();
     const origin = `http://127.0.0.1:${port}`;
-    gateway = launchGateway(command, cwd, port, fixture);
-    const problem = await ready(origin, gateway);
+    signal.throwIfAborted();
+    gateway = launchGateway(command, cwd, port, fixture, scenario);
+    const problem = await ready(origin, gateway, signal);
     if (problem) return result(problem);
     const url = `${origin}${path}`;
     const challenge = await fetch(url, {
       redirect: "manual",
-      signal: AbortSignal.timeout(5_000),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(5_000)]),
     });
     await challenge.body?.cancel();
     const required = challenge.headers.get("payment-required");
@@ -220,7 +229,7 @@ async function runScenario(
 
     const paid = await fetch(url, {
       redirect: "manual",
-      signal: AbortSignal.timeout(5_000),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(5_000)]),
       headers: { "payment-signature": paymentHeader(terms.accepted) },
     });
     httpStatus = paid.status;
@@ -232,7 +241,8 @@ async function runScenario(
       !expected.every((call, index) => fixture?.calls[index] === call)
     )
       return result("unexpected_call_sequence");
-    if (httpStatus !== scenario.httpStatus)
+    const expectedStatuses = [scenario.httpStatus].flat();
+    if (!expectedStatuses.includes(httpStatus))
       return result("unexpected_http_status");
     const receipt = paid.headers.get("payment-response");
     if (scenario.mode === "success") {
@@ -249,14 +259,20 @@ async function runScenario(
         delivered.testkitResource !== fixture.delivery.testkitResource
       )
         return result("missing_upstream_delivery");
-    } else if (
-      receipt !== null ||
-      body.includes(fixture.delivery.testkitResource)
-    ) {
-      return result("unexpected_paid_delivery");
+    } else {
+      if (body.includes(fixture.delivery.testkitResource))
+        return result("unexpected_paid_delivery");
+      if (
+        receipt !== null &&
+        (scenario.mode !== "settle-rejected" ||
+          !validReceipt(receipt, fixture.rejection))
+      ) {
+        return result("unexpected_payment_response");
+      }
     }
     return result("passed");
   } catch (error) {
+    signal.throwIfAborted();
     const reasonCode =
       error instanceof Error &&
       ["TimeoutError", "AbortError"].includes(error.name)
@@ -266,29 +282,31 @@ async function runScenario(
           : "simulation_error";
     return result(reasonCode);
   } finally {
-    await gateway?.close();
-    await fixture?.close();
+    try {
+      await gateway?.close();
+    } finally {
+      await fixture?.close();
+      await rm(cwd, { recursive: true, force: true });
+    }
   }
 }
 
 export async function runSimulation(
   suite: Suite,
   command: Command,
+  signal: AbortSignal,
 ): Promise<SimulationReport> {
-  const cwd = await mkdtemp(join(tmpdir(), "kite-x402-testkit-"));
-  try {
-    const scenarios: ScenarioResult[] = [];
-    for (const scenario of suite.scenarios)
-      scenarios.push(await runScenario(suite.path, scenario, command, cwd));
-    return {
-      schemaVersion: 1,
-      evidence: "simulation",
-      status: scenarios.every((scenario) => scenario.status === "passed")
-        ? "passed"
-        : "failed",
-      scenarios,
-    };
-  } finally {
-    await rm(cwd, { recursive: true, force: true });
+  const scenarios: ScenarioResult[] = [];
+  for (const scenario of suite.scenarios) {
+    signal.throwIfAborted();
+    scenarios.push(await runScenario(suite.path, scenario, command, signal));
   }
+  return {
+    schemaVersion: 1,
+    evidence: "simulation",
+    status: scenarios.every((scenario) => scenario.status === "passed")
+      ? "passed"
+      : "failed",
+    scenarios,
+  };
 }
