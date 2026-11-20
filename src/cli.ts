@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 import { checkEndpoint, type CheckOptions } from "./checker.js";
 import { formatText } from "./report.js";
+import { loadSuite, type Suite } from "./scenarios.js";
+import { runSimulation, type Command } from "./simulation.js";
 
 const HELP = `Kite x402 Testkit
 
 Usage:
   kite-x402-testkit check --url <url> [options]
+  kite-x402-testkit simulate --suite <file> -- <gateway> [args...]
 
 Options:
   --url <url>                Endpoint that returns an unpaid x402 challenge
@@ -63,10 +66,47 @@ function parseArgs(args: string[]): {
   };
 }
 
+async function simulate(
+  flags: string[],
+  [executable, ...args]: string[],
+): Promise<void> {
+  const path = flags[2];
+  if (flags.length !== 3 || flags[1] !== "--suite" || !path || !executable) {
+    process.stderr.write(
+      "Usage: kite-x402-testkit simulate --suite <file> -- <gateway> [args...]\n",
+    );
+    process.exitCode = 2;
+    return;
+  }
+  let suite: Suite;
+  try {
+    suite = await loadSuite(path);
+  } catch {
+    process.stderr.write("Error: invalid or unreadable scenario suite.\n");
+    process.exitCode = 2;
+    return;
+  }
+  const command: Command = [executable, ...args];
+  try {
+    const report = await runSimulation(suite, command);
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    if (report.status === "failed") process.exitCode = 1;
+  } catch {
+    process.stderr.write("Error: could not run the simulation.\n");
+    process.exitCode = 1;
+  }
+}
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
+  const separator = args[0] === "simulate" ? args.indexOf("--") : -1;
+  const flags = separator === -1 ? args : args.slice(0, separator);
+  if (flags.length === 0 || flags.includes("--help") || flags.includes("-h")) {
     process.stdout.write(HELP);
+    return;
+  }
+  if (args[0] === "simulate") {
+    await simulate(flags, separator === -1 ? [] : args.slice(separator + 1));
     return;
   }
   let parsed: ReturnType<typeof parseArgs>;

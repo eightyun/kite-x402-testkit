@@ -18,10 +18,16 @@ interface ExpectedTerms {
 
 interface ParsedOffer extends KiteOfferSummary {
   networkId: KiteNetworkId;
+  original: Record<string, unknown>;
 }
 
 type ChallengeResult =
-  | { ok: true; checks: ReportCheck[]; offers: KiteOfferSummary[] }
+  | {
+      ok: true;
+      checks: ReportCheck[];
+      offers: KiteOfferSummary[];
+      accepted: Record<string, unknown>;
+    }
   | {
       ok: false;
       reasonCode: string;
@@ -74,6 +80,7 @@ function parseKiteOffer(value: unknown): ParsedOffer | undefined {
   }
   return {
     networkId,
+    original: value,
     scheme: "exact",
     network: networkId,
     asset: value.asset,
@@ -158,7 +165,7 @@ export function validateChallenge(
     .map(parseKiteOffer)
     .filter((offer): offer is ParsedOffer => offer !== undefined);
   const offers = parsedOffers.map(
-    ({ networkId: _networkId, ...offer }) => offer,
+    ({ networkId: _networkId, original: _original, ...offer }) => offer,
   );
   const eligible =
     expected.network === undefined
@@ -230,6 +237,6 @@ export function validateChallenge(
   if (expected.amount !== undefined)
     checks.push(assertion("expect.amount", expected.amount, selected.amount));
   return matched
-    ? { ok: true, checks, offers }
+    ? { ok: true, checks, offers, accepted: matched.original }
     : { ok: false, reasonCode: "expectation_mismatch", checks, offers };
 }

@@ -32,3 +32,15 @@ Stable reason codes include `passed`, `invalid_input`, `request_timeout`, `trans
 - `0`: validation passed
 - `1`: endpoint response failed validation
 - `2`: invocation or input error
+
+## `simulate`
+
+```sh
+kite-x402-testkit simulate --suite examples/scenarios/core.json -- /absolute/path/to/gateway
+```
+
+Run a JSON suite against a gateway you trust and can start as a foreground process. The command starts a fresh process per case from a temporary directory. Use absolute paths for file arguments after `--`. The process must read `PORT`, `PAY_TO`, `PRICE_USD`, `KITE_NETWORK`, `FACILITATOR_URL` and `UPSTREAM_URL` from its environment and expose `GET /healthz` and a protected `GET /v1/...` route. Run the gateway in a local development or CI environment. The facilitator and upstream fixtures listen on loopback.
+
+The suite declares a `schemaVersion` of `1`, a protected `path`, and an array of cases with unique `id`, `mode`, and expected `httpStatus` fields. The sample checks successful delivery and settlement, then an HTTP 503 upstream failure without settlement. Configuration fixes the simulated network to Kite testnet and the offer to `0.001` pieUSD. Payloads contain synthetic signatures. The JSON report records expected and observed HTTP status and call order, and labels the evidence `simulation`.
+
+Exit statuses are `0` for a passing suite, `1` for a failed run and `2` for invalid options or suite input.

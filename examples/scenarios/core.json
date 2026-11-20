@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "path": "/v1/testkit",
+  "scenarios": [
+    { "id": "paid-success", "mode": "success", "httpStatus": 200 },
+    { "id": "upstream-failure", "mode": "upstream-error", "httpStatus": 503 }
+  ]
+}
