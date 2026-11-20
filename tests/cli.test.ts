@@ -70,3 +70,52 @@ test("CLI uses separate exit codes for failed checks and invalid input", async (
     await stopFixture(fixture.server);
   }
 });
+
+const coreSuite = fileURLToPath(
+  new URL("../../examples/scenarios/core.json", import.meta.url),
+);
+
+test("simulate reports gateway startup failure with a nonzero JUnit result", async () => {
+  const result = await runCli([
+    "simulate",
+    "--suite",
+    coreSuite,
+    "--format",
+    "junit",
+    "--",
+    process.execPath,
+    "-e",
+    "process.exit(1)",
+  ]);
+  assert.equal(result.code, 1, result.stderr);
+  assert.equal(result.stderr, "");
+  assert.match(
+    result.stdout,
+    /<testsuite name="kite-x402\.simulation" tests="5" failures="5"/,
+  );
+  assert.match(result.stdout, /<failure message="gateway_exited">/);
+});
+
+test("simulate rejects input before launching the gateway", async () => {
+  const badFormat = await runCli([
+    "simulate",
+    "--suite",
+    coreSuite,
+    "--format",
+    "text",
+    "--",
+    process.execPath,
+  ]);
+  assert.equal(badFormat.code, 2);
+  assert.equal(badFormat.stdout, "");
+
+  const invalidSuite = await runCli([
+    "simulate",
+    "--suite",
+    cliPath,
+    "--",
+    process.execPath,
+  ]);
+  assert.equal(invalidSuite.code, 2);
+  assert.match(invalidSuite.stderr, /invalid or unreadable scenario suite/);
+});

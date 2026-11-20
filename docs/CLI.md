@@ -36,7 +36,7 @@ Stable reason codes include `passed`, `invalid_input`, `request_timeout`, `trans
 ## `simulate`
 
 ```sh
-kite-x402-testkit simulate --suite examples/scenarios/core.json -- /absolute/path/to/gateway
+kite-x402-testkit simulate --suite examples/scenarios/core.json --format junit -- /absolute/path/to/gateway
 ```
 
 Run a JSON suite against a gateway you trust and can start as a foreground process. The command starts a fresh process per case from a temporary directory. Use absolute paths for file arguments after `--`. The process must read `PORT`, `PAY_TO`, `PRICE_USD`, `KITE_NETWORK`, `FACILITATOR_URL` and `UPSTREAM_URL` from its environment and expose `GET /healthz` and a protected `GET /v1/...` route. Run the gateway in a local development or CI environment. The facilitator and upstream fixtures listen on loopback.
@@ -51,6 +51,6 @@ The suite declares a `schemaVersion` of `1`, a protected `path`, and an array of
 | `settle-rejected`  | Facilitator rejects settlement        | `verify → upstream → settle` |
 | `upstream-timeout` | Upstream never sends response headers | `verify → upstream`          |
 
-Settlement refusal must withhold protected data. It may include a failure receipt. Timeout sets the gateway's `UPSTREAM_TIMEOUT_MS` to 400. The shared example accepts HTTP 502 from Axum and HTTP 504 from Hono. To check a single gateway's exact behavior, use a single status in `httpStatus`. Configuration fixes the simulated network to Kite testnet and the offer to `0.001` pieUSD. Payloads contain synthetic signatures. The JSON report records expected and observed HTTP status and call order, and labels the evidence `simulation`.
+Settlement refusal must withhold protected data. It may include a failure receipt. Timeout sets the gateway's `UPSTREAM_TIMEOUT_MS` to 400. The shared example accepts HTTP 502 from Axum and HTTP 504 from Hono. To check a single gateway's exact behavior, use a single status in `httpStatus`. Configuration fixes the simulated network to Kite testnet and the offer to `0.001` pieUSD. Payloads contain synthetic signatures. The JSON report records expected and observed HTTP status and call order, and labels the evidence `simulation`. JSON is the default. Use `--format junit` for an XML test suite with one test case per scenario and failure details suitable for CI. Redirect stdout to a file to retain the report from a failed run.
 
 Exit statuses are `0` for a passing suite, `1` for a failed run and `2` for invalid options or suite input.

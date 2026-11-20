@@ -3,12 +3,13 @@ import { checkEndpoint, type CheckOptions } from "./checker.js";
 import { formatText } from "./report.js";
 import { loadSuite, type Suite } from "./scenarios.js";
 import { runSimulation, type Command } from "./simulation.js";
+import { formatJUnit } from "./simulation-report.js";
 
 const HELP = `Kite x402 Testkit
 
 Usage:
   kite-x402-testkit check --url <url> [options]
-  kite-x402-testkit simulate --suite <file> -- <gateway> [args...]
+  kite-x402-testkit simulate --suite <file> [--format json|junit] -- <gateway> [args...]
 
 Options:
   --url <url>                Endpoint that returns an unpaid x402 challenge
@@ -70,10 +71,29 @@ async function simulate(
   flags: string[],
   [executable, ...args]: string[],
 ): Promise<void> {
-  const path = flags[2];
-  if (flags.length !== 3 || flags[1] !== "--suite" || !path || !executable) {
+  const options = new Map<string, string>();
+  for (let index = 1; index < flags.length; index += 2) {
+    const flag = flags[index];
+    const value = flags[index + 1];
+    if (
+      (flag !== "--suite" && flag !== "--format") ||
+      options.has(flag) ||
+      !value ||
+      value.startsWith("--")
+    ) {
+      process.stderr.write(
+        "Error: invalid simulation option. See simulate --help.\n",
+      );
+      process.exitCode = 2;
+      return;
+    }
+    options.set(flag, value);
+  }
+  const path = options.get("--suite");
+  const format = options.get("--format") ?? "json";
+  if (!path || !executable || (format !== "json" && format !== "junit")) {
     process.stderr.write(
-      "Usage: kite-x402-testkit simulate --suite <file> -- <gateway> [args...]\n",
+      "Error: invalid simulation option. See simulate --help.\n",
     );
     process.exitCode = 2;
     return;
@@ -100,7 +120,9 @@ async function simulate(
   try {
     const report = await runSimulation(suite, command, controller.signal);
     controller.signal.throwIfAborted();
-    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    process.stdout.write(
+      `${format === "junit" ? formatJUnit(report) : JSON.stringify(report, null, 2)}\n`,
+    );
     if (report.status === "failed") process.exitCode = 1;
   } catch {
     process.stderr.write(
