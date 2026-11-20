@@ -25,86 +25,22 @@ jobs:
       - run: npm test
       - run: npm run build
 
-  simulation:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+  official:
     strategy:
       fail-fast: false
       matrix:
-        gateway: [express, axum, hono]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - uses: actions/checkout@v4
-        if: matrix.gateway == 'express'
-        with:
-          repository: gokite-ai/kite-x402-services
-          ref: 893a27509648b660bbba626b0da59619a94f04ab
-          path: gateway
-          persist-credentials: false
-      - if: matrix.gateway == 'express'
-        working-directory: gateway/templates/typescript-express
-        run: |
-          npm ci
-          npm run build
-      - uses: actions/checkout@v4
-        if: matrix.gateway == 'axum'
-        with:
-          repository: tianzeshi-study/kite-x402-axum
-          ref: ce6c3bb5fb917734588294053ceff8f0955b9a22
-          path: gateway
-          persist-credentials: false
-      - uses: actions/checkout@v4
-        if: matrix.gateway == 'hono'
-        with:
-          repository: BrKDDD/kite-x402-hono
-          ref: 76652796f3ce3f3e552b7332d0f183572ab8aec8
-          path: gateway
-          persist-credentials: false
-      - if: matrix.gateway == 'axum'
-        working-directory: gateway
-        run: |
-          rustup toolchain install 1.88.0 --profile minimal
-          cargo +1.88.0 build --locked -p kite-x402-service
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        if: matrix.gateway == 'hono'
-        with:
-          bun-version: 1.4.5
-      - if: matrix.gateway == 'hono'
-        working-directory: gateway
-        run: npm ci
-      - name: Run shared payment scenarios
-        id: core
-        env:
-          GATEWAY: ${{ matrix.gateway }}
-        run: |
-          case "$GATEWAY" in
-            express) gateway=(node "$PWD/gateway/templates/typescript-express/dist/index.js") ;;
-            axum) gateway=("$PWD/gateway/target/debug/kite-x402-service") ;;
-            hono) gateway=(bun "$PWD/gateway/src/cli.ts") ;;
-          esac
-          node dist/src/cli.js simulate --suite examples/scenarios/core.json --format junit -- \
-            "${gateway[@]}" > simulation.xml
-      - name: Run upstream timeout scenario
-        if: ${{ !cancelled() && matrix.gateway != 'express' && (steps.core.outcome == 'success' || steps.core.outcome == 'failure') }}
-        env:
-          GATEWAY: ${{ matrix.gateway }}
-        run: |
-          case "$GATEWAY" in
-            axum) gateway=("$PWD/gateway/target/debug/kite-x402-service") ;;
-            hono) gateway=(bun "$PWD/gateway/src/cli.ts") ;;
-          esac
-          node dist/src/cli.js simulate --suite examples/scenarios/upstream-timeout.json --format junit -- \
-            "${gateway[@]}" > simulation-timeout.xml
-      - uses: actions/upload-artifact@v4
-        if: always() && hashFiles('simulation*.xml') != ''
-        with:
-          name: simulation-${{ matrix.gateway }}
-          path: simulation*.xml
+        gateway: [express, gin]
+    uses: ./.github/workflows/simulation.yml
+    with:
+      gateway: ${{ matrix.gateway }}
+
+  community:
+    needs: official
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        gateway: [axum, hono]
+    uses: ./.github/workflows/simulation.yml
+    with:
+      gateway: ${{ matrix.gateway }}

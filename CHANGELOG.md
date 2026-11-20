@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Add `simulate` with a shared suite for successful delivery, upstream failure, verification refusal, settlement refusal, and upstream timeout.
-- Export simulation results as JSON or JUnit and run the suite against the official Kite Express template, Axum, and Hono in CI.
+- Export simulation results as JSON or JUnit and run the suite against the official Kite Express and Gin templates before the community Axum and Hono gateways in CI.
 
 ## 0.1.0
 

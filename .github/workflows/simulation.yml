@@ -1,0 +1,103 @@
+name: Gateway simulation
+
+on:
+  workflow_call:
+    inputs:
+      gateway:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/checkout@v4
+        if: inputs.gateway == 'express' || inputs.gateway == 'gin'
+        with:
+          repository: gokite-ai/kite-x402-services
+          ref: 893a27509648b660bbba626b0da59619a94f04ab
+          path: gateway
+          persist-credentials: false
+      - if: inputs.gateway == 'express'
+        working-directory: gateway/templates/typescript-express
+        run: |
+          npm ci
+          npm run build
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        if: inputs.gateway == 'gin'
+        with:
+          go-version: "1.25.0"
+          cache-dependency-path: gateway/templates/go-gin/go.sum
+      - if: inputs.gateway == 'gin'
+        working-directory: gateway/templates/go-gin
+        run: go build -mod=readonly -o kite-x402-gin .
+      - uses: actions/checkout@v4
+        if: inputs.gateway == 'axum'
+        with:
+          repository: tianzeshi-study/kite-x402-axum
+          ref: ce6c3bb5fb917734588294053ceff8f0955b9a22
+          path: gateway
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        if: inputs.gateway == 'hono'
+        with:
+          repository: BrKDDD/kite-x402-hono
+          ref: 76652796f3ce3f3e552b7332d0f183572ab8aec8
+          path: gateway
+          persist-credentials: false
+      - if: inputs.gateway == 'axum'
+        working-directory: gateway
+        run: |
+          rustup toolchain install 1.88.0 --profile minimal
+          cargo +1.88.0 build --locked -p kite-x402-service
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        if: inputs.gateway == 'hono'
+        with:
+          bun-version: 1.4.5
+      - if: inputs.gateway == 'hono'
+        working-directory: gateway
+        run: npm ci
+      - name: Run shared payment scenarios
+        id: core
+        env:
+          GATEWAY: ${{ inputs.gateway }}
+        run: |
+          case "$GATEWAY" in
+            express) gateway=(node "$PWD/gateway/templates/typescript-express/dist/index.js") ;;
+            gin) gateway=("$PWD/gateway/templates/go-gin/kite-x402-gin") ;;
+            axum) gateway=("$PWD/gateway/target/debug/kite-x402-service") ;;
+            hono) gateway=(bun "$PWD/gateway/src/cli.ts") ;;
+            *) exit 2 ;;
+          esac
+          node dist/src/cli.js simulate --suite examples/scenarios/core.json --format junit -- \
+            "${gateway[@]}" > simulation.xml
+      - name: Run upstream timeout scenario
+        if: ${{ !cancelled() && (inputs.gateway == 'axum' || inputs.gateway == 'hono') && (steps.core.outcome == 'success' || steps.core.outcome == 'failure') }}
+        env:
+          GATEWAY: ${{ inputs.gateway }}
+        run: |
+          case "$GATEWAY" in
+            axum) gateway=("$PWD/gateway/target/debug/kite-x402-service") ;;
+            hono) gateway=(bun "$PWD/gateway/src/cli.ts") ;;
+            *) exit 2 ;;
+          esac
+          node dist/src/cli.js simulate --suite examples/scenarios/upstream-timeout.json --format junit -- \
+            "${gateway[@]}" > simulation-timeout.xml
+      - uses: actions/upload-artifact@v4
+        if: always() && hashFiles('simulation*.xml') != ''
+        with:
+          name: simulation-${{ inputs.gateway }}
+          path: simulation*.xml

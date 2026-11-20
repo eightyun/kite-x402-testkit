@@ -66,11 +66,14 @@ When `--network` is omitted, at least one valid Kite mainnet or testnet offer mu
 
 ## Simulate a payment flow
 
-CI checks the official Kite Express template and the community Axum and Hono gateways. The pinned revisions and build commands are in [.github/workflows/ci.yml](.github/workflows/ci.yml). After building a gateway from its checkout, run it with the shared core suite.
+CI runs the official Kite TypeScript + Express and Go + Gin templates first. The community Axum and Hono runs start once both official results are available. The pinned revisions and build commands are in [.github/workflows/simulation.yml](.github/workflows/simulation.yml). Build Gin from its `templates/go-gin` directory with `go build -mod=readonly -o kite-x402-gin .`.
 
 ```sh
 node dist/src/cli.js simulate --suite examples/scenarios/core.json -- \
   node /absolute/path/to/kite-x402-services/templates/typescript-express/dist/index.js
+
+node dist/src/cli.js simulate --suite examples/scenarios/core.json -- \
+  /absolute/path/to/kite-x402-services/templates/go-gin/kite-x402-gin
 
 node dist/src/cli.js simulate --suite examples/scenarios/core.json -- \
   /absolute/path/to/kite-x402-axum/target/debug/kite-x402-service
@@ -79,7 +82,7 @@ node dist/src/cli.js simulate --suite examples/scenarios/core.json --format juni
   bun /absolute/path/to/kite-x402-hono/src/cli.ts > simulation.xml
 ```
 
-The core suite checks successful delivery, an upstream HTTP error, verification refusal, and settlement refusal. Axum and Hono also run `examples/scenarios/upstream-timeout.json`. The official Express template has no configurable upstream timeout. Both suites check the HTTP result and exact call sequence. The fixtures use local HTTP and need no keys or funds. CI downloads the toolchains and dependencies before running the simulations.
+The core suite checks successful delivery, an upstream HTTP error, verification refusal, and settlement refusal. Axum and Hono also run `examples/scenarios/upstream-timeout.json`, which requires a configurable upstream deadline. Both suites check the HTTP result and exact call sequence. The fixtures use local HTTP and need no keys or funds. CI downloads the toolchains and dependencies before running the simulations.
 
 ## Exit codes and report
 
@@ -93,7 +96,7 @@ The `check` JSON output uses `schemaVersion: 1`, stable reason codes, sanitized 
 
 `npm test` runs the CLI and challenge regression tests. The fixtures cover a valid Kite challenge, network/asset/domain mismatches, expected-value mismatches, malformed or missing headers, unexpected status codes, timeout, and redirect handling. The suite does not contact Kite RPC, a facilitator, or any public service.
 
-GitHub Actions runs formatting, type checking, tests, and a production build on pushes and pull requests. A separate job runs the shared suite against pinned official Express, Axum, and Hono versions and uploads a JUnit report for each gateway.
+GitHub Actions runs formatting, type checking, tests, and a production build on pushes and pull requests. Gateway jobs upload JUnit reports even when a case fails. At the pinned official revision, Express passes the core suite and Gin fails it. With the suite’s chunked upstream responses, Gin omits the payment receipt after a successful call and returns HTTP 200 for upstream failure and settlement refusal. Gin also calls upstream and settlement after the facilitator fixture rejects verification. The official job reports those observations as failures.
 
 ## Architecture
 
