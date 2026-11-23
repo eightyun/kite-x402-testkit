@@ -1,7 +1,7 @@
 {
   "name": "kite-x402-testkit",
-  "version": "0.1.0",
-  "description": "CLI acceptance checks and payment flow simulations for Kite x402",
+  "version": "1.0.0",
+  "description": "CLI for Kite x402 challenge checks, gateway simulations, and testnet receipt verification",
   "license": "Apache-2.0",
   "author": "eightyun",
   "repository": {
@@ -14,10 +14,12 @@
   },
   "files": [
     "dist/src",
+    "docs/ARCHITECTURE.md",
     "docs/CLI.md",
     "docs/TESTNET.md",
     "examples/scenarios",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "engines": {
@@ -25,6 +27,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
     "check": "tsc -p tsconfig.json --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
