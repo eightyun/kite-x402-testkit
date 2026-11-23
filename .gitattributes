@@ -1,0 +1,2 @@
+# Unified diff context lines keep the space before Go indentation.
+patches/kite-go-gin-payment-boundary.patch whitespace=-space-before-tab

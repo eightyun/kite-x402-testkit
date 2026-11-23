@@ -1,0 +1,107 @@
+diff --git a/templates/go-gin/main.go b/templates/go-gin/main.go
+index 22c521a..5d05ac4 100644
+--- a/templates/go-gin/main.go
++++ b/templates/go-gin/main.go
+@@ -94,15 +94,22 @@ func main() {
+ 	paid := r.Group("/v1")
+ 	paid.Use(ginmw.X402Payment(ginmw.Config{
+ 		Routes:                 routes,
+-		Facilitator:            facilitator,
++		Facilitator:            strictFacilitator{FacilitatorClient: facilitator},
+ 		Schemes:                []ginmw.SchemeConfig{{Network: chain.Network, Server: scheme}},
+ 		SyncFacilitatorOnStart: true,
+ 		Timeout:                60 * time.Second,
++		SettlementHandler:      sendSettledHeaders,
+ 	}))
+ 	paid.Any("/*path", func(c *gin.Context) {
+ 		// Strip the /v1 prefix so /v1/forecast reaches the upstream as /forecast.
+ 		c.Request.URL.Path = strings.TrimPrefix(c.Request.URL.Path, "/v1")
+-		proxy.ServeHTTP(c.Writer, c.Request)
++		writer := &upstreamWriter{ResponseWriter: c.Writer, headers: make(http.Header)}
++		proxy.ServeHTTP(writer, c.Request)
++		if writer.status >= http.StatusBadRequest {
++			copyUpstreamHeaders(c.Writer.Header(), writer.headers)
++			return
++		}
++		c.Set(upstreamHeadersKey, writer.headers)
+ 	})
+
+ 	addr := ":" + env("PORT", "8080")
+diff --git a/templates/go-gin/payment_boundary.go b/templates/go-gin/payment_boundary.go
+new file mode 100644
+index 0000000..760efe9
+--- /dev/null
++++ b/templates/go-gin/payment_boundary.go
+@@ -0,0 +1,72 @@
++package main
++
++import (
++	"context"
++	"net/http"
++	"strings"
++
++	x402 "github.com/coinbase/x402/go"
++	"github.com/gin-gonic/gin"
++)
++
++// 固定版本的 SDK 只根据 error 判断验证是否通过。
++type strictFacilitator struct {
++	x402.FacilitatorClient
++}
++
++func (f strictFacilitator) Verify(ctx context.Context, payload, requirements []byte) (*x402.VerifyResponse, error) {
++	result, err := f.FacilitatorClient.Verify(ctx, payload, requirements)
++	if err != nil {
++		return nil, err
++	}
++	if result == nil {
++		return nil, x402.NewVerifyError(x402.ErrInvalidResponse, "", "")
++	}
++	if !result.IsValid {
++		reason := result.InvalidReason
++		if reason == "" {
++			reason = x402.ErrCodeInvalidPayment
++		}
++		return nil, x402.NewVerifyError(reason, result.Payer, "")
++	}
++	return result, nil
++}
++
++const upstreamHeadersKey = "kite.upstreamHeaders"
++
++// 正文仍由支付中间件缓冲。只暴露标准写入方法，避免代理提前刷新响应。
++type upstreamWriter struct {
++	http.ResponseWriter
++	headers http.Header
++	status  int
++}
++
++func (w *upstreamWriter) Header() http.Header { return w.headers }
++
++func (w *upstreamWriter) WriteHeader(status int) {
++	if status >= 200 && w.status == 0 {
++		w.status = status
++		w.ResponseWriter.WriteHeader(status)
++	}
++}
++
++func sendSettledHeaders(c *gin.Context, _ *x402.SettleResponse) {
++	if headers, ok := c.Get(upstreamHeadersKey); ok {
++		if upstream, ok := headers.(http.Header); ok {
++			copyUpstreamHeaders(c.Writer.Header(), upstream)
++		}
++	}
++}
++
++func copyUpstreamHeaders(dst, src http.Header) {
++	for name, values := range src {
++		// 支付头由 SDK 产生。支付中间件缓冲正文时无法转发 trailers。
++		switch http.CanonicalHeaderKey(name) {
++		case "Payment-Response", "Payment-Required", "X-Payment-Response", "X-Payment-Required", "Trailer":
++			continue
++		}
++		if !strings.HasPrefix(name, http.TrailerPrefix) {
++			dst[name] = values
++		}
++	}
++}

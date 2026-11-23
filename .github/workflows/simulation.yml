@@ -36,6 +36,9 @@ jobs:
         run: |
           npm ci
           npm run build
+      - name: Apply payment boundary fix to the pinned Gin template
+        if: inputs.gateway == 'gin'
+        run: git -C gateway apply --whitespace=error "$PWD/patches/kite-go-gin-payment-boundary.patch"
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         if: inputs.gateway == 'gin'
         with:

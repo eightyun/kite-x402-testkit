@@ -66,7 +66,12 @@ When `--network` is omitted, at least one valid Kite mainnet or testnet offer mu
 
 ## Simulate a payment flow
 
-CI runs the official Kite TypeScript + Express and Go + Gin templates first. The community Axum and Hono runs start once both official results are available. The pinned revisions and build commands are in [.github/workflows/simulation.yml](.github/workflows/simulation.yml). Build Gin from its `templates/go-gin` directory with `go build -mod=readonly -o kite-x402-gin .`.
+CI runs the official Kite TypeScript + Express and Go + Gin templates first. The community Axum and Hono runs start once both official results are available. The pinned revisions and build commands are in [.github/workflows/simulation.yml](.github/workflows/simulation.yml). CI applies the [Gin payment boundary patch](patches/kite-go-gin-payment-boundary.patch) to the pinned official source before compiling it. To reproduce that build from the Testkit checkout, set `KITE_SERVICES` to a clean checkout of the pinned revision and run:
+
+```sh
+git -C "$KITE_SERVICES" apply "$PWD/patches/kite-go-gin-payment-boundary.patch"
+(cd "$KITE_SERVICES/templates/go-gin" && go build -mod=readonly -o kite-x402-gin .)
+```
 
 ```sh
 node dist/src/cli.js simulate --suite examples/scenarios/core.json -- \
@@ -96,7 +101,7 @@ The `check` JSON output uses `schemaVersion: 1`, stable reason codes, sanitized 
 
 `npm test` runs the CLI and challenge regression tests. The fixtures cover a valid Kite challenge, network/asset/domain mismatches, expected-value mismatches, malformed or missing headers, unexpected status codes, timeout, and redirect handling. The suite does not contact Kite RPC, a facilitator, or any public service.
 
-GitHub Actions runs formatting, type checking, tests, and a production build on pushes and pull requests. Gateway jobs upload JUnit reports even when a case fails. At the pinned official revision, Express passes the core suite and Gin fails it. With the suite’s chunked upstream responses, Gin omits the payment receipt after a successful call and returns HTTP 200 for upstream failure and settlement refusal. Gin also calls upstream and settlement after the facilitator fixture rejects verification. The official job reports those observations as failures.
+GitHub Actions runs formatting, type checking, tests, and a production build on pushes and pull requests. Gateway jobs upload JUnit reports even when a case fails. Both Express and the patched Gin build pass the same four core scenarios locally. The Gin patch makes the template honor the facilitator’s explicit rejection and keeps upstream headers buffered until settlement succeeds. The pinned SDK version treats a negative verification response returned with HTTP 200 as a successful call, and the proxy can flush chunked response headers before the middleware adds the receipt or sets the final status.
 
 ## Architecture
 
