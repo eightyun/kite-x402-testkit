@@ -76,4 +76,4 @@ JSON output uses `schemaVersion: 1` and `evidence: "chain_receipt"`. It identifi
 | `2`  | Invalid input  | Invalid command arguments, or an `invalid_input` report for invalid values                                                   |
 | `3`  | `inconclusive` | `receipt_not_found`, `insufficient_confirmations`, `block_not_canonical`, `rpc_timeout`, `rpc_error`, `invalid_rpc_response` |
 
-See the [testnet walkthrough](TESTNET.md) for a reproducible historical example and the evidence to retain for a paid smoke test.
+See the [testnet walkthrough](TESTNET.md) for a verified test payment and the evidence to retain for future runs.
