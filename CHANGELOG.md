@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add `verify-receipt` to check confirmed Kite testnet pieUSD transfers through read-only RPC.
+
 - Patch the pinned official Go + Gin template in CI so explicit verification failures stop the request and settlement controls when upstream success headers are released.
 - Add `simulate` with a shared suite for successful delivery, upstream failure, verification refusal, settlement refusal, and upstream timeout.
 - Export simulation results as JSON or JUnit and run the suite against the official Kite Express and Gin templates before the community Axum and Hono gateways in CI.

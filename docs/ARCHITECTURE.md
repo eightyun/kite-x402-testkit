@@ -28,6 +28,16 @@ JSON suite
   -> stop the gateway and fixtures, then emit JSON or JUnit
 ```
 
+## Receipt verification flow
+
+```text
+Transaction hash and expected terms
+  -> query trusted Kite testnet RPC using read-only methods
+  -> check chain ID, receipt, block hash, and confirmation depth
+  -> compare pieUSD Transfer event with expected sender, recipient, and amount
+  -> emit text or JSON with a pass, failure, or inconclusive result
+```
+
 ## Modules
 
 - `src/cli.ts`: argument parsing, command dispatch, output formatting, and process exit code.
@@ -39,6 +49,7 @@ JSON suite
 - `src/simulation.ts`: process lifecycle and HTTP assertions.
 - `src/simulation-fixture.ts`: loopback HTTP fixtures and synthetic payloads.
 - `src/simulation-report.ts`: JUnit serialization.
+- `src/receipt.ts`: read-only Kite testnet JSON-RPC client and pieUSD transfer assertions.
 
 ## Kite protocol boundary
 
@@ -56,4 +67,4 @@ The initial checker recognizes Kite mainnet `eip155:2366` and testnet `eip155:23
 
 ## Validation boundaries
 
-A `check` pass confirms the observed challenge matches the expected Kite offer. A `simulate` pass confirms the observed flow for the local fixtures and selected gateway build. Chain finality requires separate RPC evidence from a real transaction.
+A `check` pass confirms the observed challenge matches the expected Kite offer. A `simulate` pass confirms the observed flow for the local fixtures and selected gateway build. A `verify-receipt` pass records what one RPC observed about the supplied transaction, including confirmation depth. To link that transaction to a service call, retain the settlement hash from that same call.
