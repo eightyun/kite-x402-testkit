@@ -6,7 +6,7 @@ Kite x402 Testkit is a command-line acceptance tool for Kite x402 services. Use 
 
 The checker validates the payment terms advertised by Kite x402 services: x402 v2, the `exact` scheme, Kite mainnet (`eip155:2366`) or testnet (`eip155:2368`), the network's settlement asset, and its EIP-712 domain. The chain and asset constants are defined in `src/kite.ts`; challenge decoding and validation are in `src/challenge.ts`. The documented Kite testnet payment exercises the same terms with a live Pieverse facilitator.
 
-The simulation exercises a Kite testnet offer using a synthetic payment payload. JSON reports label this evidence `simulation`. Receipt verification checks the chain ID, confirmations, and a matching pieUSD transfer on Kite testnet. See the [testnet walkthrough](docs/TESTNET.md) for an example and the steps to verify a transaction from an external payer.
+The simulation exercises a Kite testnet offer using a synthetic payment payload. JSON reports label this evidence `simulation`. Receipt verification checks the chain ID, confirmations, and a matching pieUSD transfer on Kite testnet. See the [testnet walkthrough](docs/TESTNET.md) for an example and the steps to verify a transaction from an external payer such as `kx402`.
 
 ## Requirements
 
